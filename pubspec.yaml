@@ -1,0 +1,72 @@
+name: vibe_study_timer
+description: "Vibe Coding Study Timer — a mobile focus timer built around the 60-Minute Vibe Coding Lab."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management (replaces the React hook/context wiring)
+  provider: ^6.1.2
+
+  # Local persistence for sessions + prompt log.
+  # This absorbs the old Node backend (server.js + db.js) into the device.
+  shared_preferences: ^2.3.3
+
+  # Plays the synthesized chimes/bells/fanfare
+  audioplayers: ^6.1.0
+
+  # Keeps the screen awake while a focus session is running
+  wakelock_plus: ^1.2.8
+
+  # Date formatting for the prompt log timestamps
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    # Display / headings (ported from --font-main)
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit-500.ttf
+          weight: 500
+        - asset: assets/fonts/Outfit-600.ttf
+          weight: 600
+        - asset: assets/fonts/Outfit-700.ttf
+          weight: 700
+        - asset: assets/fonts/Outfit-800.ttf
+          weight: 800
+
+    # Body copy (ported from --font-body)
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-400.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans-500.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-600.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-700.ttf
+          weight: 700
+
+    # Digits, timers and badges (ported from --font-mono)
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-500.ttf
+          weight: 500
+        - asset: assets/fonts/JetBrainsMono-700.ttf
+          weight: 700

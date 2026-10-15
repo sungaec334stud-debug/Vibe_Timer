@@ -1,83 +1,125 @@
-# 📱 Vibe Study Timer — Mobile React App
+# 📱 Vibe Study Timer — Flutter App
 
-> **"Building software by describing what you want — and knowing when to look under the hood."**  
-> A dedicated mobile study timer built in **React**, structured directly around the **60-Minute Vibe Coding Lab** (Slide 15) and lessons from Andrej Karpathy's lecture.
+> **"Building software by describing what you want — and knowing when to look under the hood."**
+> A dedicated mobile study timer built in **Flutter**, structured directly around the **60-Minute Vibe Coding Lab** (Slide 15) and lessons from Andrej Karpathy's lecture.
+
+This is the Flutter rewrite of the original React + Node project. The `frontend/`
+and `backend/` folders have been merged into a single self-contained Flutter app.
 
 ---
 
 ## 🌟 Highlights & Features
 
-- **Mobile First / Native Mobile UI:** Designed for phone viewports with mobile status bar, dynamic island, touch-friendly dial, and smooth animations.
+- **Native Mobile UI:** Portrait-locked, dark OLED theme, safe-area aware, with the
+  bundled `Outfit`, `Plus Jakarta Sans` and `JetBrains Mono` typefaces.
 - **60-Minute Vibe Coding Lab Timer (Slide 15):** Tracks the 4 structured phases of vibe-coding:
   - `0–10 min` **Phase 1: Plan** — Formulate prompt anatomy (Context, Goal, Constraints, Example, Done when).
   - `10–40 min` **Phase 2: Build** — Fast AI iterations, frequent Git commits, and feeding runtime errors back.
   - `40–50 min` **Phase 3: Audit** — Security checks against OWASP Top 10 flaws and slopsquatting.
   - `50–60 min` **Phase 4: Reflect** — Complete reflection and defend your code.
-- **Study Presets:** Includes 60m Vibe Lab, 25m Pomodoro, 50m Deep Work, 15m Sprint, and Custom time.
-- **Quick Prompt & Error Logger:** Slide-up bottom sheet allowing you to log prompt iterations or paste error tracebacks on the fly.
+- **Study Presets:** 60m Vibe Lab, 25m Pomodoro, 50m Deep Work, 15m Sprint, and Custom (minutes + seconds).
+- **Quick Prompt & Error Logger:** Slide-up bottom sheet for logging prompt iterations or pasting error tracebacks on the fly.
 - **Class Rule Banner (Slide 14):** *"You may vibe code. You may not submit code you can't explain."*
-- **Web Audio API Chimes:** Pure client-side synthetic Tibetan bowl tones and double bell stage transition alerts.
-- **Mobile Viewport Switcher:** Easily toggle between Phone Device frame mode and flat mobile mode.
+- **Synthesized Chimes:** The original Web Audio API tones are now rendered as PCM WAV
+  bytes in pure Dart and played through `audioplayers` — 528 Hz bowl chime, E5+A5 stage
+  bell, C5→E5→G5→C6 completion fanfare, and a UI click.
+- **Screen Wake Lock:** The display stays awake while a session is running.
 
 ---
 
-## 🗂️ Clean Separation of Components & Functions
+## 🗂️ Project Structure
 
 ```
 vibe-study-timer-mobile/
-├── package.json
-├── README.md
+├── pubspec.yaml                  # Dependencies + bundled font declarations
+├── assets/fonts/                 # Outfit, Plus Jakarta Sans, JetBrains Mono (TTF)
 │
-├── backend/                       # BACKEND (Node.js API)
-│   ├── server.js                  # Lightweight HTTP API server (Port 3001)
-│   └── db.js                      # Persistent JSON storage for sessions & prompts
+├── lib/
+│   ├── main.dart                 # Entry point: opens the store, locks to portrait
+│   ├── app.dart                  # MultiProvider wiring + MaterialApp
+│   │
+│   ├── theme/
+│   │   └── app_theme.dart        # Colour/text/radius tokens ported from variables.css
+│   │
+│   ├── models/
+│   │   ├── lab_phase.dart        # LAB_PHASES + PRESETS data
+│   │   └── study_models.dart     # StudySession, PromptLog, StudyStats
+│   │
+│   ├── data/
+│   │   └── local_store.dart      # On-device store (absorbs the old Node backend)
+│   │
+│   ├── services/
+│   │   └── audio_service.dart    # WAV synthesis + playback
+│   │
+│   ├── controllers/
+│   │   ├── timer_controller.dart # Countdown + phase tracking (ChangeNotifier)
+│   │   └── stats_controller.dart # Aggregate metrics + prompt log
+│   │
+│   ├── screens/
+│   │   └── home_screen.dart      # The single screen
+│   │
+│   └── widgets/
+│       ├── timer_dial.dart       # CustomPainter progress ring + digits
+│       ├── timer_controls.dart   # Start/Pause, Next phase, Reset
+│       ├── preset_selector.dart  # Horizontal preset chips
+│       ├── lab_roadmap.dart      # 4-stage 60m lab tracker
+│       ├── class_rule_card.dart  # Slide 14 class rule banner
+│       ├── session_stats_bar.dart# Focus minutes / sessions / prompts
+│       ├── quick_prompt_sheet.dart   # Prompt + error log bottom sheet
+│       ├── custom_timer_sheet.dart   # Minutes + seconds picker with validation
+│       └── toast_banner.dart     # Transient status pill
 │
-└── frontend/                      # FRONTEND (React + Vite)
-    ├── vite.config.js             # Vite configuration with port 5173 & API proxy
-    ├── index.html                 # Mobile-optimized HTML
-    └── src/
-        ├── main.jsx               # React entry point
-        ├── App.jsx                # Main mobile application orchestrator
-        │
-        ├── styles/                # CSS DESIGN SYSTEM
-        │   ├── variables.css      # OLED theme tokens & typography
-        │   ├── mobile.css         # Phone chassis, status bar & layout
-        │   ├── timer.css          # Circular SVG dial & controls
-        │   └── components.css     # Roadmap, bottom sheet & cards
-        │
-        ├── services/              # FUNCTIONAL SERVICES
-        │   ├── audio.js           # Web Audio API chime synthesis
-        │   └── api.js             # REST API client
-        │
-        ├── hooks/                 # REACT CUSTOM HOOKS
-        │   └── useTimer.js        # Countdown, phase tracker & preset logic
-        │
-        └── components/            # MODULAR REACT COMPONENTS
-            ├── MobileFrame.jsx    # Phone frame, dynamic island & clock
-            ├── TimerDial.jsx      # SVG circular progress ring & digits
-            ├── TimerControls.jsx  # Play/Pause, Next Phase & Reset
-            ├── PresetSelector.jsx # Horizontal preset chips
-            ├── LabRoadmap.jsx     # 4-stage 60m lab tracker
-            ├── ClassRuleCard.jsx  # Slide 14 class rule banner
-            ├── QuickPromptSheet.jsx # Slide-up prompt/error log drawer
-            └── SessionStats.jsx   # Focus minutes & sessions summary
+├── android/                      # Android runner
+├── ios/                          # iOS runner
+└── web/                          # Web runner
 ```
 
 ---
 
 ## 🚀 Running the App
 
-### 1. Start the Backend API (Port 3001)
+The backend is gone — sessions and prompts are stored **on the device**, so there is
+no server to start.
+
 ```bash
-node backend/server.js
+flutter pub get
+
+flutter run                 # attached device / emulator
+flutter run -d chrome       # run in a browser
+flutter run -d windows      # desktop
 ```
 
-### 2. Start the Frontend React Dev Server (Port 5173)
+Build a release bundle:
+
 ```bash
-cd frontend
-npm run dev
+flutter build apk --release   # Android
+flutter build ios --release   # iOS
+flutter build web --release   # Web  → build/web
 ```
 
-Open your browser at:
-👉 **[http://localhost:5173](http://localhost:5173)**  
-*(As shown in Slide 1: `[ok] running at localhost:5173`)*
+Quality gates:
+
+```bash
+flutter analyze
+flutter test
+```
+
+---
+
+## 🔀 What Changed From The React + Node Version
+
+| Original | Now |
+|---|---|
+| `backend/server.js` + `backend/db.js` (HTTP API + JSON file) | `lib/data/local_store.dart` — `shared_preferences`, same data shape and stats aggregation |
+| `frontend/src/services/api.js` (`fetch` + `localStorage` fallback) | Merged into `LocalStore`; no network calls |
+| `frontend/src/services/audio.js` (Web Audio API) | `lib/services/audio_service.dart` — WAV bytes synthesized in Dart |
+| `frontend/src/hooks/useTimer.js` | `lib/controllers/timer_controller.dart` (`ChangeNotifier`) |
+| `frontend/src/components/MobileFrame.jsx` | Dropped — native `Scaffold`/`AppBar`/`SafeArea` (the fake status bar and dynamic island were web-simulator artifacts) |
+| `frontend/src/styles/*.css` | `lib/theme/app_theme.dart` design tokens |
+| Google Fonts via CDN | TTFs bundled in `assets/fonts/` so the app works fully offline |
+
+---
+
+## 📄 License
+
+MIT

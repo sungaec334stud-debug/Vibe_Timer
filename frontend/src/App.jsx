@@ -12,6 +12,7 @@ import LabRoadmap from './components/LabRoadmap';
 import ClassRuleCard from './components/ClassRuleCard';
 import SessionStats from './components/SessionStats';
 import QuickPromptSheet from './components/QuickPromptSheet';
+import CustomTimerModal from './components/CustomTimerModal';
 
 import { useTimer } from './hooks/useTimer';
 import { audioService } from './services/audio';
@@ -21,6 +22,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState(null);
   const [soundMuted, setSoundMuted] = useState(audioService.isMuted());
   const [isPromptSheetOpen, setIsPromptSheetOpen] = useState(false);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [prompts, setPrompts] = useState([]);
   const [stats, setStats] = useState({ totalMinutes: 0, totalSessions: 0, totalPrompts: 0 });
 
@@ -81,6 +83,19 @@ export default function App() {
     }));
   };
 
+  const handlePresetSelect = (presetId) => {
+    if (presetId === 'custom') {
+      setIsCustomModalOpen(true);
+    } else {
+      selectPreset(presetId);
+    }
+  };
+
+  const handleCustomConfirm = (totalSeconds) => {
+    setIsCustomModalOpen(false);
+    selectPreset('custom', totalSeconds);
+  };
+
   const isLabActive = currentPreset === 'vibe_lab_60';
 
   return (
@@ -99,7 +114,7 @@ export default function App() {
       {/* Preset Scroll Selector */}
       <PresetSelector 
         currentPreset={currentPreset}
-        onSelectPreset={selectPreset}
+        onSelectPreset={handlePresetSelect}
       />
 
       {/* Main Circular SVG Timer Dial */}
@@ -142,6 +157,13 @@ export default function App() {
         prompts={prompts}
         onPromptAdded={handlePromptAdded}
         onToast={showToast}
+      />
+
+      {/* Custom Timer Modal (Minutes + Seconds + Error Handling) */}
+      <CustomTimerModal 
+        isOpen={isCustomModalOpen}
+        onConfirm={handleCustomConfirm}
+        onCancel={() => setIsCustomModalOpen(false)}
       />
     </MobileFrame>
   );

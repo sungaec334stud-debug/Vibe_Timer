@@ -29,26 +29,26 @@ export function useTimer(onToast) {
   const currentPhase = LAB_PHASES[currentPhaseIndex];
 
   // Set Preset
-  const selectPreset = useCallback((presetId) => {
+  const selectPreset = useCallback((presetId, customSeconds = null) => {
     setIsRunning(false);
     setCurrentPreset(presetId);
-    let mins = 60;
 
-    if (presetId === 'custom') {
-      const input = window.prompt('Enter study duration in minutes:', '45');
-      const parsed = parseInt(input, 10);
-      mins = parsed && parsed > 0 ? parsed : 45;
+    let dur = 60 * 60;
+    if (presetId === 'custom' && customSeconds !== null) {
+      dur = Math.max(5, customSeconds);
     } else {
       const match = PRESETS.find(p => p.id === presetId);
-      if (match) mins = match.minutes;
+      if (match) dur = match.minutes * 60;
     }
 
-    const dur = mins * 60;
     setTotalDuration(dur);
     setRemainingSeconds(dur);
     setCurrentPhaseIndex(0);
 
-    if (onToast) onToast(`Timer set to ${mins} minutes`);
+    const mins = Math.floor(dur / 60);
+    const secs = dur % 60;
+    const timeStr = secs > 0 ? `${mins}m ${secs}s` : `${mins} min`;
+    if (onToast) onToast(`Timer set to ${timeStr}`);
   }, [onToast]);
 
   // Toggle Start / Pause

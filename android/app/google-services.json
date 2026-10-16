@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "731224658615",
+    "project_id": "vibe-study-timer",
+    "storage_bucket": "vibe-study-timer.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:731224658615:android:b4c33b890ecd5d5048f332",
+        "android_client_info": {
+          "package_name": "com.vibetimer.vibe_study_timer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqTeqoCzzef6yumfgQbpPRdg5b_s1d14A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// Firestore security rules for the Vibe Study Timer.
+//
+// DEPLOY THIS. The default "test mode" rules that ship with a new Firebase
+// project allow anyone with the API key to read and write every collection —
+// which here means every user's full study history and prompt log.
+//
+//   firebase deploy --only firestore:rules
+//
+// Cost note: rules are not filters. A user can only ever read or write
+// documents under their own uid path, so a client-side query cannot be used to
+// read someone else's rows.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // Default deny for anything not explicitly matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

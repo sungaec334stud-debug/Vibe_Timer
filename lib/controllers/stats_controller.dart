@@ -1,18 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/local_store.dart';
 import '../models/study_models.dart';
+import '../services/sync_service.dart';
 
 /// Holds the aggregate metrics and the prompt log shown on the home screen.
 ///
 /// Replaces the `refreshData()` wiring in `App.jsx`, which used to fetch
 /// `/api/stats` and `/api/prompts` from the Node backend.
 class StatsController extends ChangeNotifier {
-  StatsController(this._store) {
+  StatsController(this._store, [this._sync]) {
     refresh();
   }
 
   final LocalStore _store;
+
+  /// Optional cloud mirror. Null in tests and guest-only builds, in which case
+  /// writes simply stay on-device.
+  final SyncService? _sync;
 
   StudyStats _stats = const StudyStats();
   List<PromptLog> _prompts = <PromptLog>[];
@@ -41,6 +48,12 @@ class StatsController extends ChangeNotifier {
     _prompts = <PromptLog>[prompt, ..._prompts];
     _stats = _store.getStats();
     notifyListeners();
+
+    // Fire-and-forget: Firestore queues the write offline and the local row is
+    // already durable, so there is nothing for the caller to await.
+    final SyncService? sync = _sync;
+    if (sync != null) unawaited(sync.pushPrompt(prompt));
+
     return prompt;
   }
 

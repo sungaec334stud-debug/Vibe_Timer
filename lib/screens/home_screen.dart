@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../controllers/auth_controller.dart';
 import '../controllers/stats_controller.dart';
 import '../controllers/timer_controller.dart';
+import '../data/local_store.dart';
 import '../models/study_models.dart';
 import '../services/audio_service.dart';
+import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/class_rule_card.dart';
 import '../widgets/custom_timer_sheet.dart';
@@ -15,6 +18,8 @@ import '../widgets/session_stats_bar.dart';
 import '../widgets/timer_controls.dart';
 import '../widgets/timer_dial.dart';
 import '../widgets/toast_banner.dart';
+import 'auth_screen.dart';
+import 'settings_screen.dart';
 
 /// The single screen of the app.
 ///
@@ -57,7 +62,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _toggleSound() async {
     final AudioService audio = context.read<AudioService>();
+    final LocalStore store = context.read<LocalStore>();
     final bool next = await audio.toggleMute();
+    // Persist before repainting: `main()` reads this back on the next launch
+    // via `AudioService..restoreMuteState(store.isMuted)`, so an un-awaited write
+    // here would silently lose the preference if the app is killed now.
+    await store.setMuted(next);
     if (!mounted) return;
     setState(() => _soundMuted = next);
     _showToast(next ? 'Sound Muted' : 'Audio Chime Enabled');
@@ -94,10 +104,30 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Signed out -> login/register. Signed in -> profile + sync + sign out.
+  Future<void> _openAccount() async {
+    final AuthController auth = context.read<AuthController>();
+    if (auth.isSignedIn) {
+      await SettingsScreen.show(context);
+      return;
+    }
+
+    final bool? signedIn = await AuthScreen.show(context);
+    if (!mounted || signedIn != true) return;
+
+    final SyncStatus sync = context.read<AuthController>().syncStatus;
+    _showToast(
+      sync.phase == SyncPhase.failed
+          ? 'Signed in — sync will retry when you are online.'
+          : 'Signed in. Your sessions are backed up.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final TimerController timer = context.watch<TimerController>();
     final StudyStats stats = context.watch<StatsController>().stats;
+    final bool isSignedIn = context.watch<AuthController>().isSignedIn;
 
     return Scaffold(
       appBar: AppBar(
@@ -126,6 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: <Widget>[
+          _HeaderAction(
+            icon: isSignedIn
+                ? Icons.account_circle_rounded
+                : Icons.account_circle_outlined,
+            tooltip: isSignedIn ? 'Account (signed in)' : 'Sign in',
+            onPressed: _openAccount,
+          ),
           _HeaderAction(
             icon: _soundMuted
                 ? Icons.volume_off_rounded

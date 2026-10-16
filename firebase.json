@@ -1,0 +1,26 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "vibe-study-timer",
+          "appId": "1:731224658615:android:b4c33b890ecd5d5048f332",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "vibe-study-timer",
+          "configurations": {
+            "android": "1:731224658615:android:b4c33b890ecd5d5048f332",
+            "ios": "1:731224658615:ios:e65d590bdacc32bf48f332",
+            "web": "1:731224658615:web:d99ec941f351de1248f332"
+          }
+        }
+      }
+    }
+  }
+}

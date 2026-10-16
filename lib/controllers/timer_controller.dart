@@ -6,17 +6,23 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../data/local_store.dart';
 import '../models/lab_phase.dart';
+import '../models/study_models.dart';
 import '../services/audio_service.dart';
+import '../services/sync_service.dart';
 
 /// Ported from `src/hooks/useTimer.js`.
 ///
 /// Same 250 ms tick, same wall-clock delta maths, same lab phase detection,
 /// and the same automatic session log on completion.
 class TimerController extends ChangeNotifier {
-  TimerController(this._store, this._audio);
+  TimerController(this._store, this._audio, [this._sync]);
 
   final LocalStore _store;
   final AudioService _audio;
+
+  /// Optional cloud mirror for completed sessions. Null in tests and
+  /// guest-only builds.
+  final SyncService? _sync;
 
   static const Duration _tickInterval = Duration(milliseconds: 250);
 
@@ -185,11 +191,14 @@ class TimerController extends ChangeNotifier {
     _audio.playCompletionFanfare();
 
     final int minutes = (_totalDuration / 60).round();
-    _store.addSession(
+    final StudySession session = _store.addSession(
       mode: _preset.id,
       title: isLabActive ? '60-Minute Vibe Coding Lab' : '$minutes m Focus',
       durationMinutes: minutes,
     );
+
+    final SyncService? sync = _sync;
+    if (sync != null) unawaited(sync.pushSession(session));
 
     onSessionComplete?.call();
     notifyListeners();

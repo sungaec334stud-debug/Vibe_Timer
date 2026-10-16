@@ -71,22 +71,26 @@ vibe-study-timer-mobile/
 │
 ├── android/                      # Android runner
 ├── ios/                          # iOS runner
-└── web/                          # Web runner
+├── web/                          # Web runner
+├── tool/
+│   └── verify_firebase_auth.dart # Checks the console setup for accounts
+└── test/
 ```
 
 ---
 
 ## 🚀 Running the App
 
-The backend is gone — sessions and prompts are stored **on the device**, so there is
-no server to start.
+The backend is gone — sessions and prompts are stored **on the device** by
+default, so there is no server to start. (Cloud sync is optional; see
+[Accounts & Cloud Sync](#-accounts--cloud-sync-optional) below.)
 
 ```bash
 flutter pub get
 
 flutter run                 # attached device / emulator
 flutter run -d chrome       # run in a browser
-flutter run -d windows      # desktop
+flutter run -d windows      # desktop — timer only, see "Accounts" below
 ```
 
 Build a release bundle:
@@ -103,6 +107,115 @@ Quality gates:
 flutter analyze
 flutter test
 ```
+
+---
+
+## ☁️ Accounts & Cloud Sync (optional)
+
+Signing in is **optional**. Out of the box the app runs in **guest mode**: the
+timer and prompt log work exactly as before, stored on the device only.
+
+To enable accounts and two-way sync you need a Firebase project:
+
+```bash
+dart pub global activate flutterfire_cli
+flutterfire configure
+```
+
+That overwrites `lib/firebase_options.dart` and writes
+`android/app/google-services.json` + `ios/Runner/GoogleService-Info.plist`.
+
+`flutterfire configure` alone is **not enough**. Registering apps does not set up
+sign-in, and no amount of reconfiguring will enable a provider that was never
+turned on. Then:
+
+1. **Firebase console → Authentication → Get started.** The very first visit
+   asks you to initialise Identity Platform — accept it. Skipping this leaves
+   the project with no auth configuration at all, and sign-in fails with
+   `configuration not found` no matter what the app does.
+2. **Authentication → Sign-in method** → enable **Email/Password**.
+3. **Firebase console → Firestore Database** → create the database.
+4. **Deploy the security rules** — the default rules are wide open:
+
+   ```bash
+   firebase deploy --only firestore:rules
+   ```
+
+5. **Web only:** Authentication → Settings → **Authorized domains** must
+   contain `localhost`, or `flutter run -d chrome` is refused.
+6. **iOS only:** open `ios/Runner.xcworkspace` in Xcode and drag
+   `GoogleService-Info.plist` into the Runner target. This step is manual.
+
+Check all of the above at once, without reading app error messages and
+guessing:
+
+```bash
+dart run tool/verify_firebase_auth.dart
+```
+
+It is read-only — it signs in with an undeliverable `.invalid` address, so it
+creates no account and sends no email.
+
+### Platform support for accounts
+
+| Target | Accounts | Why |
+|---|---|---|
+| Android, iOS, Web | ✅ | Firebase ships SDKs for all three |
+| Windows / macOS / Linux desktop | ❌ | Firebase ships no desktop SDK, and `flutterfire configure` has no desktop target to generate |
+
+On desktop the timer and prompt log work normally; only sign-in is unavailable,
+and the account screen says so instead of blaming the config.
+
+Without the Firebase config the app logs `Firebase disabled, running in guest
+mode` and starts normally — a fresh clone is always runnable.
+
+### If accounts don't work
+
+The app distinguishes the ways it can fail, instead of failing after you type
+your password. `lib/services/firebase_bootstrap.dart` classifies startup into:
+
+| State | Meaning |
+|---|---|
+| `FirebaseReady` | Accounts and sync are live. |
+| `FirebaseNotConfigured` | `flutterfire configure` has not been run yet. |
+| `FirebaseInitFailed` | A project is linked but `initializeApp` rejected it — stale or missing `google-services.json` / `GoogleService-Info.plist`. |
+| `FirebaseUnsupportedPlatform` | Running on Windows/macOS/Linux desktop, where Firebase has no SDK. |
+
+The account screen shows a banner naming the fix the moment it opens, and the
+submit button is disabled so it cannot fail after you have entered credentials.
+Look for this line in the console at startup:
+
+```
+Firebase disabled, running in guest mode: <reason>
+```
+
+If you get `FirebaseInitFailed` after configuring, re-run `flutterfire
+configure` and do a `flutter clean` — a stale platform file is the usual cause.
+
+### What sync does
+
+| Event | Guest | Signed in |
+|---|---|---|
+| Session / prompt logged | device only | device + Firestore, queued while offline |
+| App closed | persists | persists |
+| App uninstalled | **lost** | restored on next sign-in |
+| New phone | **lost** | restored on next sign-in |
+| Sign out | — | device copy is wiped, cloud copy kept |
+
+Guest data accumulated before the first sign-in is **migrated once** to whichever
+account signs in first, then claimed by that device permanently — a second
+account on the same device never inherits it.
+
+### Layout
+
+```
+users/{uid}/sessions/{sessionId}
+users/{uid}/prompts/{promptId}
+```
+
+Sessions and prompts are **write-once** (there is no edit or delete in the
+UI), so syncing is a union by id — no `updatedAt`, no conflict resolution. See
+`lib/services/sync_service.dart`.
 
 ---
 

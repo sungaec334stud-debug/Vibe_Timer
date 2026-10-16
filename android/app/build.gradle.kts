@@ -4,6 +4,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase Auth + Firestore need the Google Services plugin, but that plugin
+// errors out when google-services.json is absent. Applying it conditionally
+// keeps a fresh clone buildable in guest-only mode — `flutterfire configure`
+// writes the file, and until then Firebase.initializeApp() is what actually
+// fails (and is caught) at runtime.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.vibetimer.vibe_study_timer"
     compileSdk = flutter.compileSdkVersion
@@ -19,7 +28,8 @@ android {
         applicationId = "com.vibetimer.vibe_study_timer"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Firebase Auth requires API 23+; Flutter's own floor is 21.
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)

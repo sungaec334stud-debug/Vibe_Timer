@@ -1,25 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/study_models.dart';
 
-/// On-device replacement for the old Node backend (`server.js` + `db.js` +
-/// the `localStorage` fallback in `services/api.js`).
-///
-/// The public surface mirrors the REST routes one-for-one so the widgets
-/// needed no changes:
-///
-/// | Old route            | Method here           |
-/// |----------------------|-----------------------|
-/// | GET  /api/sessions   | [getSessions]         |
-/// | POST /api/sessions   | [addSession]          |
-/// | GET  /api/prompts    | [getPrompts]          |
-/// | POST /api/prompts    | [addPrompt]           |
-/// | GET  /api/stats      | [getStats]            |
-///
-/// Data is stored as JSON strings under the same keys the web build used,
-/// seeded on first launch with the same demo rows as `defaultData`.
+/// On-device store. Reads stay synchronous so the existing widgets and
+/// controllers keep working unchanged; the cloud copy ([SyncService]) is a
+/// side-effect layered on top of writes.
+final Uuid _uuid = Uuid();
+
 class LocalStore {
   LocalStore(this._prefs);
 
@@ -27,13 +18,38 @@ class LocalStore {
   static const String _promptsKey = 'vibe_m_prompts';
   static const String _mutedKey = 'vibe_mobile_muted';
 
+  /// Set to the uid that first claimed this device's guest data. Its presence
+  /// is what stops a *second* account on the same device from re-importing an
+  /// already-migrated (and since wiped) local dataset.
+  static const String _claimedUidKey = 'vibe_m_claimed_uid';
+
   final SharedPreferences _prefs;
+
+  /// In-flight [SharedPreferences] writes. `shared_preferences` uses Android's
+  /// `apply()`, which is asynchronous — if the OS kills the process before the
+  /// flush lands, the write is silently lost. Callers await this to close that
+  /// window before reporting success.
+  final Set<Future<bool>> _pendingWrites = <Future<bool>>{};
 
   /// Loads the store, seeding demo data on first run.
   static Future<LocalStore> open() async {
     final store = LocalStore(await SharedPreferences.getInstance());
     store._seedIfEmpty();
     return store;
+  }
+
+  /// Waits for every write issued so far to hit disk.
+  Future<void> flushPendingWrites() async {
+    if (_pendingWrites.isEmpty) return;
+    await Future.wait(_pendingWrites.toList());
+  }
+
+  void _track(Future<bool> write) {
+    _pendingWrites.add(write);
+    write.then<void>(
+      (_) => _pendingWrites.remove(write),
+      onError: (Object _, StackTrace _) => _pendingWrites.remove(write),
+    );
   }
 
   void _seedIfEmpty() {
@@ -69,7 +85,7 @@ class LocalStore {
 
   List<StudySession> getSessions() {
     return _read(_sessionsKey)
-        .map((e) => StudySession.fromJson(e))
+        .map(StudySession.fromJson)
         .toList(growable: false);
   }
 
@@ -81,7 +97,10 @@ class LocalStore {
   }) {
     final sessions = getSessions();
     final session = StudySession(
-      id: 'sess_${DateTime.now().millisecondsSinceEpoch}',
+      // A uuid, not a millisecond timestamp: these ids become Firestore
+      // document ids, and two devices whose clocks agree would otherwise
+      // collide and silently merge two distinct sessions into one document.
+      id: 'sess_${_uuid.v4()}',
       mode: mode,
       title: title,
       durationMinutes: durationMinutes,
@@ -93,16 +112,16 @@ class LocalStore {
   }
 
   void _writeSessions(List<StudySession> sessions) {
-    _prefs.setString(
+    _track(_prefs.setString(
       _sessionsKey,
       jsonEncode(sessions.map((s) => s.toJson()).toList()),
-    );
+    ));
   }
 
   // ----------------------------------------------------------------- prompts
 
   List<PromptLog> getPrompts() {
-    return _read(_promptsKey).map((e) => PromptLog.fromJson(e)).toList();
+    return _read(_promptsKey).map(PromptLog.fromJson).toList();
   }
 
   PromptLog addPrompt({
@@ -112,7 +131,7 @@ class LocalStore {
   }) {
     final prompts = getPrompts();
     final prompt = PromptLog(
-      id: 'p_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'p_${_uuid.v4()}',
       phase: phase,
       text: text,
       outcome: (outcome == null || outcome.isEmpty) ? null : outcome,
@@ -123,10 +142,78 @@ class LocalStore {
   }
 
   void _writePrompts(List<PromptLog> prompts) {
-    _prefs.setString(
+    _track(_prefs.setString(
       _promptsKey,
       jsonEncode(prompts.map((p) => p.toJson()).toList()),
-    );
+    ));
+  }
+
+  // -------------------------------------------------------------- sync merge
+
+  /// Unions [incoming] into local storage by id.
+  ///
+  /// Sessions and prompts are write-once in this app — there is no edit and no
+  /// delete anywhere in the UI — so the merge is a plain set union. No
+  /// timestamps, no conflict resolution, no last-write-wins.
+  ///
+  /// Returns the number of genuinely new rows added.
+  int mergeSessions(Iterable<StudySession> incoming) {
+    final byId = <String, StudySession>{
+      for (final s in getSessions()) s.id: s,
+    };
+    var added = 0;
+    for (final s in incoming) {
+      if (s.id.isEmpty || byId.containsKey(s.id)) continue;
+      byId[s.id] = s;
+      added++;
+    }
+    if (added > 0) {
+      // `getStats()` treats `sessions.first` as the most recent session, so a
+      // merge must restore the newest-first ordering the append paths produce.
+      final merged = byId.values.toList()
+        ..sort((a, b) => b.completedAt.compareTo(a.completedAt));
+      _writeSessions(merged);
+    }
+    return added;
+  }
+
+  /// Prompt-log counterpart of [mergeSessions]; union by id, newest first.
+  int mergePrompts(Iterable<PromptLog> incoming) {
+    final byId = <String, PromptLog>{
+      for (final p in getPrompts()) p.id: p,
+    };
+    var added = 0;
+    for (final p in incoming) {
+      if (p.id.isEmpty || byId.containsKey(p.id)) continue;
+      byId[p.id] = p;
+      added++;
+    }
+    if (added > 0) {
+      final merged = byId.values.toList()
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      _writePrompts(merged);
+    }
+    return added;
+  }
+
+  // ----------------------------------------------------------- user boundary
+
+  /// Drops the account's rows from this device.
+  ///
+  /// Called on sign-out. Without it, account A's study history stays readable
+  /// by whoever next opens the app as a guest. Note this writes an empty list
+  /// rather than removing the key — `_seedIfEmpty()` treats an absent key as
+  /// "first launch" and would re-seed the demo rows.
+  void clearUserData() {
+    _track(_prefs.setString(_sessionsKey, '[]'));
+    _track(_prefs.setString(_promptsKey, '[]'));
+  }
+
+  /// The uid that already claimed this device's guest data, if any.
+  String? get claimedMigrationUid => _prefs.getString(_claimedUidKey);
+
+  Future<void> setClaimedMigrationUid(String uid) {
+    return _prefs.setString(_claimedUidKey, uid);
   }
 
   // ------------------------------------------------------------------- stats

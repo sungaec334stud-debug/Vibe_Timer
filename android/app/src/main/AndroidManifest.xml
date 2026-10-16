@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Firebase Auth + Firestore. Must live in the MAIN manifest: the
+         debug/profile manifests already had it, but release builds would
+         otherwise fail with a SocketException on the first sync. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="vibe_study_timer"
         android:name="${applicationName}"
